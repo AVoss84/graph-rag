@@ -83,7 +83,7 @@ You can also integrate the retriever with LangChain's `RetrievalQA` for end-to-e
 from langchain.chains import RetrievalQA
 from langchain_google_vertexai import ChatVertexAI
 
-llm = ChatVertexAI(model_name="gemini-2.5-flash", temperature=0.1, thinking_budget=0)
+llm = ChatVertexAI(model_name="gemini-2.5-flash", temperature=0.1)
 
 qa_chain = RetrievalQA.from_chain_type(
 	llm=llm,
