@@ -70,7 +70,9 @@ retriever = GraphRAGRetriever(
 
 # 6. Retrieve relevant documents for a query
 query = "How can I configure the Actionbar in Allplan?"
+
 docs = retriever.get_relevant_documents(query)
+
 for d in docs:
 	print(d.metadata, d.page_content[:100])
 ```
@@ -79,6 +81,9 @@ You can also integrate the retriever with LangChain's `RetrievalQA` for end-to-e
 
 ```python
 from langchain.chains import RetrievalQA
+from langchain_google_vertexai import ChatVertexAI
+
+llm = ChatVertexAI(model_name="gemini-2.5-flash", temperature=0.1, thinking_budget=0)
 
 qa_chain = RetrievalQA.from_chain_type(
 	llm=llm,
