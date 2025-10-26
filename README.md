@@ -1,14 +1,25 @@
 
-# Graph RAG
+# GraphRAG implementation
 
-Graph RAG is a framework for building and querying knowledge graphs from unstructured documents using Retrieval-Augmented Generation (RAG) techniques. It leverages document embeddings, named entity recognition, and graph-based retrieval to enable advanced semantic search and context retrieval for LLMs.
+GraphRAG is a framework for building and querying knowledge graphs from unstructured documents using Retrieval-Augmented Generation (RAG) techniques. It leverages document embeddings, named entity recognition, and graph-based retrieval to enable advanced semantic search and context retrieval for LLMs.
+
+**Key Features and Technologies:**
+- **Graph Construction:** Uses [networkx](https://networkx.org/) for in-memory knowledge graph creation and manipulation.
+- **Named Entity Recognition:** Extracts concepts/entities from documents using the [GLiNER](https://github.com/urchade/gliner) package for robust NER.
+- **Semantic Search:** Employs in-memory [FAISS](https://github.com/facebookresearch/faiss) for semantic similarity search (for production, a proper vector database is recommended).
+- **LangChain Integration:** Provides a LangChain-compatible retriever wrapper for seamless integration with RetrievalQA pipelines.
+- **Production-Grade Scalability:** For large-scale or production deployments, consider using a graph database such as Neo4j (or similar) for graph storage and a dedicated vector database for semantic search instead of in-memory FAISS.
+
 
 ## Features
 - Extracts concepts/entities from documents using GLiNER
 - Generates document embeddings (supports LangChain embedding models)
-- Builds a kNN knowledge graph with concept-enhanced edge weights
+- Builds a kNN knowledge graph with concept-enhanced edge weights using networkx
 - Graph-based retrieval with semantic and centrality-aware ranking
-- Integrates with LangChain for RetrievalQA pipelines
+- Integrates with LangChain for RetrievalQA pipelines via a provided wrapper
+- In-memory FAISS for semantic search (swap for a vector DB in production)
+
+> **Note:** For production-grade, large-scale graphs, swap out networkx for a persistent graph database (e.g., Neo4j) and use a scalable vector database for semantic search instead of in-memory FAISS.
 
 
 ## Installation
