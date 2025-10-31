@@ -241,7 +241,7 @@ class KnowledgeGraph:
             metric (str, optional): Similarity metric to use ("IP" for inner product, etc.). Defaults to "IP".
             similarity_threshold (float, optional): Minimum similarity threshold for edge creation. Defaults to 0.5.
             concept_weight (float, optional): Weight for concept overlap in edge weight calculation (between 0 and 1). Defaults to 0.3.
-            save_dir (str, optional): Directory to save/load the adjacency list. If None, uses default package directory.
+            save_dir (str): Directory to save/load the adjacency list. If None, uses default package directory.
             with_concepts (bool, optional): Whether to enhance edge weights with concept overlap. Defaults to True.
 
         Returns:
@@ -271,6 +271,7 @@ class KnowledgeGraph:
             for i, doc in enumerate(docs):
                 if i in G.nodes():
                     G.nodes[i]["content"] = doc
+                    G.nodes[i]["embedding"] = embeddings[i].tolist()
 
             if self.verbose:
                 print("Graph topology without concept enhancement:")
@@ -287,6 +288,7 @@ class KnowledgeGraph:
         for i, (doc, concepts) in enumerate(zip(docs, concepts_per_chunk)):
             if i in G.nodes():
                 G.nodes[i]["content"] = doc
+                G.nodes[i]["embedding"] = embeddings[i].tolist()
                 G.nodes[i]["concepts"] = concepts
 
         # Enhance edge weights with concept overlap
@@ -327,7 +329,7 @@ class KnowledgeGraph:
                 f"  Avg degree: {sum(dict(G.degree()).values()) / G.number_of_nodes():.2f}"
             )
         self.nx_graph = G
-        return G
+        return self.nx_graph
 
     def build_faiss_index(self, embeddings: np.ndarray, metric: str = "IP") -> None:
         """
