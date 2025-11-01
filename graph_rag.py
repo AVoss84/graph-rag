@@ -161,7 +161,10 @@ class KnowledgeGraph:
 
                 # Skip self (first neighbor) and add edges
                 for j in range(1, len(neighbors[0])):
-                    if neighbors[0][j] >= 0:  # Valid neighbor
+                    # ensures no self-loops are written to the adjacency list
+                    if (
+                        neighbors[0][j] >= 0 and neighbors[0][j] != i
+                    ):  # Valid neighbor, not self
                         dist = dists[0][j]
 
                         # Apply threshold if specified
@@ -392,7 +395,9 @@ class KnowledgeGraph:
         }
 
     @staticmethod
-    def visualize_graph_simple(G: nx.Graph, max_nodes: int = 50) -> None:
+    def visualize_graph_simple(
+        G: nx.Graph, max_nodes: int = 50, title: Optional[str] = None, **kwargs
+    ) -> None:
         """
         Visualizes a NetworkX graph using a simple spring layout.
 
@@ -403,6 +408,7 @@ class KnowledgeGraph:
         Args:
             G (nx.Graph): The NetworkX graph to visualize. Edges must have a 'weight' attribute.
             max_nodes (int, optional): Maximum number of nodes to display. Defaults to 50.
+            title (str, optional): Title for the graph plot. If None, a default title is used.
 
         Returns:
             None: Displays the graph using matplotlib.
@@ -423,7 +429,7 @@ class KnowledgeGraph:
         plt.figure(figsize=(10, 5))
 
         # Use spring layout for better visualization
-        pos = nx.spring_layout(G_sub, k=0.5, iterations=50)
+        pos = nx.spring_layout(G_sub, k=0.5, iterations=50, **kwargs)
 
         # Draw nodes
         nx.draw_networkx_nodes(
@@ -439,7 +445,10 @@ class KnowledgeGraph:
         # Add labels
         nx.draw_networkx_labels(G_sub, pos, font_size=8)
 
-        plt.title(f"Allplan Manual Knowledge Graph ({G_sub.number_of_nodes()} nodes)")
+        if title is None:
+            title = f"Knowledge Graph ({G_sub.number_of_nodes()} nodes)"
+
+        plt.title(title)
         plt.axis("off")
         plt.tight_layout()
         plt.show()
