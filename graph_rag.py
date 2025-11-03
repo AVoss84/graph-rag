@@ -3,11 +3,13 @@ from typing import Callable, Dict, List, Optional, Tuple, Any
 from pydantic import PrivateAttr
 import warnings
 from tqdm import tqdm
+import random
 import faiss
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from gliner import GLiNER
+from gensim.models import Word2Vec
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -106,11 +108,11 @@ class KnowledgeGraph:
         self,
         embeddings: np.ndarray,
         k: int = 10,
-        metric: str = "L2",
+        metric: str = "IP",
         save_dir: Optional[str] = None,
         filename: Optional[str] = "graph_adjlist.txt",
         threshold: Optional[float] = None,
-    ) -> Tuple[List[float], float]:
+    ) -> Tuple[np.ndarray, float]:
         """
         Generate kNN adjacency list using FAISS for NetworkX graph construction.
 
@@ -153,6 +155,7 @@ class KnowledgeGraph:
             filepath = os.path.join(save_dir, filename)
 
         with open(filepath, "w") as f:
+            # Loop over all nodes to find k-NNs
             for i in tqdm(
                 range(n_items), desc="Building edges", disable=not self.verbose
             ):
@@ -183,7 +186,7 @@ class KnowledgeGraph:
                         if metric == "L2":
                             # Convert L2 distance to similarity-like weight
                             # Closer nodes get higher weights
-                            weight = 1.0 / (1.0 + dist)
+                            weight = 1.0 / (1.0 + dist)  # prevent division by zero
                         else:  # IP
                             # Already a similarity score [0, 1]
                             weight = dist
@@ -197,10 +200,12 @@ class KnowledgeGraph:
                             edge_count += 1
 
         # Calculate final threshold:
+        # --------------------------
         if threshold is not None:
             final_threshold = threshold
         elif distances:
-            final_threshold = np.mean(distances)
+            # final_threshold = np.mean(distances)
+            final_threshold = np.median(distances)
         else:
             final_threshold = 0
 
@@ -217,7 +222,7 @@ class KnowledgeGraph:
                     f"  Distance range: [{np.min(distances):.3f}, {np.max(distances):.3f}]"
                 )
 
-        return distances, final_threshold
+        return np.array(distances, dtype=float), final_threshold
 
     def create_graph(
         self,
@@ -252,7 +257,7 @@ class KnowledgeGraph:
         """
         # Create initial adjacency list based on embeddings
         # This will be saved to disk for loading into NetworkX
-        self.create_adjacency_list(
+        self.distances, self.final_threshold = self.create_adjacency_list(
             embeddings=embeddings,
             k=k,
             metric=metric,
@@ -312,7 +317,7 @@ class KnowledgeGraph:
             # Get current similarity weight
             current_weight = G[u][v]["weight"]
 
-            # Linearly combine similarity and concept overlap
+            # Update: Linearly combine similarity and concept overlap
             new_weight = (
                 1 - concept_weight
             ) * current_weight + concept_weight * overlap
@@ -395,6 +400,84 @@ class KnowledgeGraph:
         }
 
     @staticmethod
+    def random_walk(graph: nx.Graph, start_node: int, walk_length: int) -> List[int]:
+        """
+        Generate a random walk starting from a node.
+
+        Args:
+            graph (nx.Graph): The NetworkX graph to walk on.
+            start_node (int): The node to start the walk from.
+            walk_length (int): The length of the random walk.
+
+        Returns:
+            List[int]: A list of node IDs representing the random walk path.
+        """
+        walk = [start_node]
+        for _ in range(walk_length - 1):
+            cur = walk[-1]
+            neighbors = list(graph.neighbors(cur))
+            if len(neighbors) > 0:
+                walk.append(random.choice(neighbors))
+            else:
+                break
+        return walk
+
+    @staticmethod
+    def fit_deepwalk(
+        G: nx.Graph,
+        walk_length: int = 10,
+        num_walks: int = 80,
+        vector_size: int = 300,
+        window: int = 5,
+        workers: int = 2,
+    ) -> np.ndarray:
+        """
+        Fit a DeepWalk model to calculate node embeddings using random walks and Word2Vec.
+
+        Args:
+            G (nx.Graph): The NetworkX graph to generate embeddings for.
+            walk_length (int, optional): Length of each random walk. Defaults to 10.
+            num_walks (int, optional): Number of random walks per node. Defaults to 80.
+            vector_size (int, optional): Dimensionality of the node embeddings. Defaults to 300.
+            window (int, optional): Context window size for Word2Vec. Defaults to 5.
+            workers (int, optional): Number of parallel workers for Word2Vec. Defaults to 2.
+
+        Returns:
+            np.ndarray: Node embeddings as a numpy array of shape (num_nodes, vector_size).
+        """
+        logger.info(
+            f"Fitting DeepWalk model with {num_walks} walks of length {walk_length}"
+        )
+
+        # Generate random walks
+        walks = []
+        nodes = list(G.nodes())
+
+        for _ in tqdm(range(num_walks), desc="Generating walks"):
+            random.shuffle(nodes)
+            for node in nodes:
+                walks.append(
+                    [str(n) for n in KnowledgeGraph.random_walk(G, node, walk_length)]
+                )
+
+        logger.info(f"Generated {len(walks)} walks, training Word2Vec on walks...📈")
+
+        # Train Word2Vec model
+        model = Word2Vec(
+            walks,
+            vector_size=vector_size,
+            window=window,
+            min_count=0,
+            sg=1,  # Skip-gram
+            workers=workers,
+        )
+
+        # Extract node embeddings
+        nodes = list(G.nodes())
+        node_embeddings = np.array([model.wv[str(node)] for node in nodes])
+        return node_embeddings
+
+    @staticmethod
     def visualize_graph_simple(
         G: nx.Graph, max_nodes: int = 50, title: Optional[str] = None, **kwargs
     ) -> None:
@@ -427,11 +510,8 @@ class KnowledgeGraph:
             G_sub = G
 
         plt.figure(figsize=(10, 5))
-
-        # Use spring layout for better visualization
         pos = nx.spring_layout(G_sub, k=0.5, iterations=50, **kwargs)
 
-        # Draw nodes
         nx.draw_networkx_nodes(
             G_sub, pos, node_size=300, node_color="lightblue", alpha=0.7
         )
@@ -508,6 +588,7 @@ class KnowledgeGraph:
             central = G.nodes[node].get(
                 "deg_centrality", 0.0
             )  # use degree centrality as bonus
+
             # If centrality is zero, only semantic similarity counts
             adj_score = sim_score * (1.0 + centrality_weight * central)
             seeds.append((node, adj_score))
